@@ -1,0 +1,48 @@
+name: buildkit/fronted-dockerfile image build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 1 * *"
+
+jobs:
+  prepare:
+    runs-on: debian
+    outputs:
+      tags: ${{ steps.set-tags.output.tags }}
+    steps:
+      - name: Get latest patch versions of buildkit-fronted
+        id: set-tags
+        run: |
+          TAGS=$(bash scripts/get-tags.sh)
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+  build-image:
+    needs: prepare
+    runs-on: debian
+    strategy:
+      matrix:
+        tag: ${{ fromJson(needs.prepare.outputs.tags) }}
+    env:
+      BUILDKIT_VERSION: ${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: modify Dockerfile
+        run: |
+          python scripts/modify.py frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile > frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile.modify
+
+      - name: build image
+        run: |
+          docker buildx build --load -t lcr.loongnix.cn/library/dockerfile:${{ matrix.tag }} -f frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile.modify .
+
+      - name: uploda image
+        run: |
+          docker push lcr.loongnix.cn/library/dockerfile:${{ matrix.tag }}
+
+
