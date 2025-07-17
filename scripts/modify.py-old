@@ -1,6 +1,6 @@
 import re
 import os
-import sys
+import sys # 导入 sys 模块用于访问命令行参数
 
 def modify_dockerfile(dockerfile_content):
     """
@@ -8,7 +8,6 @@ def modify_dockerfile(dockerfile_content):
     1. 在第一行前面添加 '#'。
     2. 将 XX_VERSION 的值修改为 '1.6.1'。
     3. 将 ALPINE_VERSION 的值设置为空。
-    4. 根据不同的 'AS' 值修改 'FROM' 语句。
 
     Args:
         dockerfile_content (str): 原始 Dockerfile 的内容。
@@ -27,15 +26,18 @@ def modify_dockerfile(dockerfile_content):
         remaining_lines = []
 
     # 定义用于匹配 golang:1.1X-alpine 的正则表达式
+    # re.I 使匹配不区分大小写 (FROM 或 from)
+    # re.M 使 ^ 和 $ 匹配每一行的开始和结束
     golang_alpine_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?golang:1\.1\d-alpine)", re.IGNORECASE)
     golang_debian_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?golang:1\.1\d-buster)", re.IGNORECASE)
     golang_default_pattern = re.compile(
         r"^(FROM\s+--platform=\$[A-Z_]+\s+golang:1\.1\d\s+AS\s+base\s*$)",
         re.IGNORECASE
     )
-    # Golang patterns with dynamic 'AS'
-    golang_xx_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?tonistiigi/xx:golang\S*\s+AS\s+(\S+))", re.IGNORECASE)
-    golang_xx_master_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?tonistiigi/xx:master\S*\s+AS\s+(\S+))", re.IGNORECASE)
+    #FROM --platform=$BUILDPLATFORM tonistiigi/xx:golang@sha256:6f7d999551dd471b58f70716754290495690efa8421e0a1fcf18eb11d0c0a537 AS xgo
+    golang_xx_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?tonistiigi/xx:golang\S*)", re.IGNORECASE)
+    golang_xx_master_pattern = re.compile(r"^(FROM\s+(?:--platform=\$[A-Z_]+\s+)?tonistiigi/xx:master\S*)", re.IGNORECASE)
+
 
     # 遍历剩余行进行其他修改
     for line in remaining_lines:
@@ -63,11 +65,14 @@ def modify_dockerfile(dockerfile_content):
             modified_lines.append("ARG ALPINE_VERSION=")
         # 4. 替换 golang:1.1X-alpine
         elif golang_alpine_pattern.match(line):
+            # 将匹配到的行替换为 golang:1.19-alpine
             modified_lines.append("FROM --platform=$BUILDPLATFORM golang:1.19-alpine AS base")
         # 5. 替换 golang:1.1X-sid
         elif golang_debian_pattern.match(line):
+            # 将匹配到的行替换为 golang:1.19-sid
             modified_lines.append("FROM --platform=$BUILDPLATFORM golang:1.21 AS base")
         elif golang_default_pattern.match(line):
+            # 将匹配到的行替换为 golang:1.19-sid
             modified_lines.append("FROM --platform=$BUILDPLATFORM golang:1.21 AS base")
         else:
             modified_lines.append(line)
@@ -80,9 +85,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python modify_dockerfile.py <Dockerfile路径>")
         print("示例: python modify_dockerfile.py ./Dockerfile")
-        sys.exit(1)  # 退出程序，表示错误
+        sys.exit(1) # 退出程序，表示错误
 
-    dockerfile_path = sys.argv[1]  # 获取第一个命令行参数作为 Dockerfile 路径
+    dockerfile_path = sys.argv[1] # 获取第一个命令行参数作为 Dockerfile 路径
 
     if not os.path.exists(dockerfile_path):
         print(f"错误: 文件 '{dockerfile_path}' 不存在。")

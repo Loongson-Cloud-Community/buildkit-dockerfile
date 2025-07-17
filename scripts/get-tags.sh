@@ -26,7 +26,7 @@ while true; do
   PAGE=$((PAGE + 1))
 
   # 为了避免触发 GitHub API 的速率限制，可以在这里添加一个短暂的延迟
-  # sleep 0.1
+  #sleep 0.1
 done
 
 # 从临时文件读取所有标签，过滤并格式化为 JSON 数组
@@ -36,7 +36,28 @@ done
 # split("\n"): 将字符串按换行符分割成数组
 # map(select(startswith("dockerfile/"))): 过滤出以 "dockerfile/" 开头的元素
 # map(select(length > 0)): 移除可能存在的空字符串元素 (例如文件末尾的空行)
-jq -R -s -c 'split("\n") | map(select(startswith("dockerfile/"))) | map(select(length > 0))' "$TEMP_TAGS_FILE"
+#jq -R -s -c 'split("\n") | map(select(startswith("dockerfile/"))) | map(select(length > 0))' "$TEMP_TAGS_FILE"
+jq -R -s -c '
+  split("\n") |
+  map(select(startswith("dockerfile/"))) |
+  map(select(length > 0)) |
+  # Find the index of the tag we want to stop before
+  # and take only the slice up to that index.
+  # If "dockerfile/1.4.0-labs" is not found, it will include all matching tags.
+  (
+    . as $tags |
+    reduce range(0; length) as $i (
+      {result: [], found: false};
+      if $tags[$i] == "dockerfile/1.1.0" then
+        .found = true
+      elif .found == false then
+        .result += [$tags[$i]]
+      else
+        .
+      end
+    ) | .result[:60]
+  )
+' "$TEMP_TAGS_FILE"
 
 # 清理临时文件
 rm "$TEMP_TAGS_FILE"

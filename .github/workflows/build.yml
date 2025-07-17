@@ -20,13 +20,6 @@ jobs:
           ENV=$(cat /etc/os-release)
           echo "OS is $ENV"
 
-      - name: Docker login # 添加 Docker 登录步骤
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }} # 使用秘密 DOCKER_USERNAME
-          password: ${{ secrets.DOCKER_PASSWORD }} # 使用秘密 DOCKER_PASSWORD
-          registry: lcr.loongnix.cn
-
       - name: Get latest patch versions of buildkit-frontend
         id: set-tags # 为此步骤设置一个 ID，以便在 outputs 中引用
         run: |
@@ -47,7 +40,7 @@ jobs:
 
   build-image:
     needs: prepare # 依赖 prepare job
-    runs-on: ubuntu-latest # 保持与 prepare job 一致，或根据需要选择
+    runs-on: self-hosted # 保持与 prepare job 一致，或根据需要选择
     timeout-minutes: 60
     strategy:
       matrix:
@@ -57,30 +50,28 @@ jobs:
     env:
       BUILDKIT_VERSION: ${{ matrix.tag }} # 将当前矩阵的 tag 设置为环境变量
     steps:
-      - uses: actions/checkout@v4
+      - uses: chenguohui/checkout@v3-node20
         with:
           ref: main # 确保检出的是 main 分支
 
-      - uses: docker/setup-qemu-action@v3 # 设置 QEMU
-      - uses: docker/setup-buildx-action@v3 # 设置 Buildx
-
-      - name: Docker login to lcr.loongnix.cn # 登录你的私有注册表
-        uses: docker/login-action@v3
-        with:
-          registry: lcr.loongnix.cn
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Clone Repo
         run: |
           git clone --depth 1 -b ${{ matrix.tag }} https://github.com/moby/buildkit
 
-      - name: modify Dockerfile
+      - name: Modify Dockerfile
         # 确保 scripts/modify.py 存在且可执行
         run: |
           python scripts/modify.py buildkit/frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile > buildkit/frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile.modify
 
-      - name: build && upload image
+      - name: Docker login # 添加 Docker 登录步骤
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }} # 使用秘密 DOCKER_USERNAME
+          password: ${{ secrets.DOCKER_PASSWORD }} # 使用秘密 DOCKER_PASSWORD
+          registry: lcr.loongnix.cn
+
+      - name: Build Image
         run: |
           # 使用修改后的 Dockerfile.modify 来构建镜像
           DOCKER_TAG=$(echo "${{ matrix.tag }}" | sed 's|^dockerfile/||')
@@ -89,4 +80,5 @@ jobs:
       - name: Clean cache
         run: |
           rm -rf buildkit
+
 
